@@ -1,7 +1,7 @@
 # LTM Group 13 — TCP Server Load Research
 
 Khảo sát ảnh hưởng của số client TCP đồng thời đến latency, throughput, error rate
-và CPU của server. Hiện tại repository là khung project; chưa triển khai benchmark.
+và CPU của server. Đã có server skeleton asyncio; bộ tạo tải và benchmark chưa triển khai.
 
 ## Thiết lập Python (Windows / PowerShell)
 
@@ -52,10 +52,29 @@ sẽ dùng thư viện chuẩn (`asyncio`, `socket`, `json`, `argparse`); `psuti
 3 lần lặp/mức, payload 1024 byte, warm-up 5 giây, đo chính thức 20 giây.
 Đây là cấu hình dự kiến, chưa có chương trình đọc và thực thi cấu hình.
 
-Trước khi chạy cần hoàn thành server, load generator, framing message, kiểm tra
-requestId/payload, timeout, disconnect và giới hạn payload. Sau đó bổ sung lệnh chạy
-hai process và tái tạo ít nhất một thí nghiệm tại đây.
+Server đã có framing, echo requestId/payload, timeout, disconnect và giới hạn payload.
+Cần triển khai load generator, đo lường và lệnh tái tạo thí nghiệm.
 
 Checklist yêu cầu và quyết định ban đầu: [docs/research-plan.md](docs/research-plan.md).
 Không commit `.venv`, cache hoặc log tạm. Dữ liệu thô và biểu đồ có chủ đích được
 giữ trong Git để tái lập nghiên cứu. Không đưa thông tin cá nhân vào dữ liệu đo.
+
+## Chạy server skeleton
+
+Tại thư mục project, sau khi kích hoạt `.venv`:
+
+```powershell
+$env:PYTHONPATH = "src"
+python -m server --host 127.0.0.1 --port 9000 --timeout 5 --max-payload-bytes 65536
+```
+
+Dừng bằng Ctrl+C. Linux/macOS: `PYTHONPATH=src python -m server`.
+Server dùng một coroutine cho mỗi kết nối, hỗ trợ nhiều request trên một kết nối.
+Mỗi frame gồm 4 byte độ dài unsigned big-endian và JSON UTF-8 có `requestId`
+(chuỗi không rỗng, tối đa 128 ký tự) và `payload` (chuỗi, giới hạn theo byte UTF-8).
+Response trả lại đúng hai trường này. Frame tối đa 512 KiB; payload mặc định 64 KiB.
+Dữ liệu sai hoặc timeout sẽ đóng riêng kết nối đó, không gửi error frame.
+Timeout áp dụng cho việc đọc toàn bộ một frame và drain response, mỗi bước riêng.
+Server không log từng request ở mức INFO để hạn chế ảnh hưởng đến benchmark.
+
+Chạy kiểm thử: `python -m pytest -q`.
