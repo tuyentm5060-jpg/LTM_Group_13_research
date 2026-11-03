@@ -1,0 +1,3 @@
+# Runtime measurement and analysis tools (versions locked after environment setup).
+psutil==7.2.2
+matplotlib==3.10.8
