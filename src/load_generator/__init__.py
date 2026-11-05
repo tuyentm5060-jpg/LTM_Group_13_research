@@ -1,1 +1,1 @@
-"""Concurrent TCP load generator (to be implemented)."""
+"""Asyncio TCP load generator module."""
