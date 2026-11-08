@@ -1,0 +1,20 @@
+{
+  "run_id": "c50_r3",
+  "clients": 50,
+  "warmup_s": 5.0,
+  "duration_s": 20.0,
+  "payload_size": 1024,
+  "throttle_ms": 0.0,
+  "host": "127.0.0.1",
+  "port": 9000,
+  "total_requests": 253332,
+  "successful_requests": 253332,
+  "failed_requests": 0,
+  "error_rate_pct": 0.0,
+  "throughput_req_s": 12666.6,
+  "avg_latency_ms": 3.9401,
+  "p95_latency_ms": 4.9785,
+  "cpu_avg_pct": 0.0,
+  "cpu_max_pct": 0.0,
+  "num_cpu_samples": 40
+}

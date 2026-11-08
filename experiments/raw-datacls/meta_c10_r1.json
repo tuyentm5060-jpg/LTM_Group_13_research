@@ -1,0 +1,20 @@
+{
+  "run_id": "c10_r1",
+  "clients": 10,
+  "warmup_s": 5.0,
+  "duration_s": 20.0,
+  "payload_size": 1024,
+  "throttle_ms": 0.0,
+  "host": "127.0.0.1",
+  "port": 9000,
+  "total_requests": 276258,
+  "successful_requests": 276258,
+  "failed_requests": 0,
+  "error_rate_pct": 0.0,
+  "throughput_req_s": 13812.9,
+  "avg_latency_ms": 0.716,
+  "p95_latency_ms": 1.0996,
+  "cpu_avg_pct": 91.185,
+  "cpu_max_pct": 99.9,
+  "num_cpu_samples": 40
+}

@@ -1,0 +1,19 @@
+{
+  "host": "127.0.0.1",
+  "port": 9000,
+  "clients": [1, 10, 50],
+  "repeats": 3,
+  "warmup_s": 5,
+  "duration_s": 20,
+  "payload_size": 1024,
+  "throttle_ms": 0,
+  "timeout_s": 5,
+  "server": {
+    "timeout_s": 5,
+    "max_payload": 65536
+  },
+  "paths": {
+    "raw_data": "raw-data",
+    "figures": "figures"
+  }
+}

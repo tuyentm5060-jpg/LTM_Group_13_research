@@ -1,45 +1,63 @@
-"""Wire format: 4-byte big-endian length followed by UTF-8 JSON."""
+"""Length-prefix framing protocol dùng chung cho Server và Load Generator.
+
+Frame:
+    [4 bytes big-endian uint32: body length = len(requestId) + len(payload)]
+    [16 bytes requestId]
+    [payload: 0..MAX_PAYLOAD bytes]
+"""
 
 import asyncio
-import json
 import struct
 
-MAX_FRAME_BYTES = 512 * 1024
+HEADER_SIZE = 4
+REQUEST_ID_SIZE = 16
+MAX_PAYLOAD = 64 * 1024  # 64 KB
 
 
-class ProtocolError(ValueError):
-    """Invalid frame or message."""
+class ProtocolError(Exception):
+    """Raised khi message không hợp lệ (sai requestId size, payload vượt giới hạn...)."""
 
 
-def validate_message(message: object, max_payload_bytes: int) -> dict:
-    if not isinstance(message, dict):
-        raise ProtocolError("Message must be an object")
-    request_id = message.get("requestId")
-    if not isinstance(request_id, str) or not request_id or len(request_id) > 128:
-        raise ProtocolError("requestId must be a nonempty string of at most 128 characters")
-    payload = message.get("payload")
-    if not isinstance(payload, str):
-        raise ProtocolError("payload must be a string")
-    if len(payload.encode("utf-8")) > max_payload_bytes:
-        raise ProtocolError("Payload too large")
-    return {"requestId": request_id, "payload": payload}
+def encode_message(request_id: bytes, payload: bytes) -> bytes:
+    if len(request_id) != REQUEST_ID_SIZE:
+        raise ProtocolError(
+            f"request_id phải đúng {REQUEST_ID_SIZE} bytes, nhận {len(request_id)}"
+        )
+    if len(payload) > MAX_PAYLOAD:
+        raise ProtocolError(f"payload quá lớn: {len(payload)} > {MAX_PAYLOAD}")
+    body = request_id + payload
+    header = struct.pack(">I", len(body))
+    return header + body
 
 
-def encode_message(message: dict) -> bytes:
-    body = json.dumps(message, ensure_ascii=False, separators=(",", ":")).encode("utf-8")
-    if not 0 < len(body) <= MAX_FRAME_BYTES:
-        raise ProtocolError("Frame too large")
-    return struct.pack("!I", len(body)) + body
+async def read_message(
+    reader: asyncio.StreamReader, max_payload: int = MAX_PAYLOAD
+) -> tuple[bytes, bytes]:
+    """Đọc đủ một message, không giả định readexactly trả về một lần.
+
+    Raise:
+        asyncio.IncompleteReadError nếu peer đóng giữa chừng.
+        ProtocolError nếu length không hợp lệ.
+    """
+    header = await reader.readexactly(HEADER_SIZE)
+    (length,) = struct.unpack(">I", header)
+    if length < REQUEST_ID_SIZE:
+        raise ProtocolError(f"body quá ngắn: {length} < {REQUEST_ID_SIZE}")
+    if length > REQUEST_ID_SIZE + max_payload:
+        raise ProtocolError(
+            f"body quá lớn: {length} > {REQUEST_ID_SIZE + max_payload}"
+        )
+    body = await reader.readexactly(length)
+    return body[:REQUEST_ID_SIZE], body[REQUEST_ID_SIZE:]
 
 
-async def read_message(reader: asyncio.StreamReader, max_payload_bytes: int) -> dict:
-    header = await reader.readexactly(4)
-    size = struct.unpack("!I", header)[0]
-    if not 0 < size <= MAX_FRAME_BYTES:
-        raise ProtocolError("Invalid frame length")
-    body = await reader.readexactly(size)
-    try:
-        message = json.loads(body.decode("utf-8"))
-        return validate_message(message, max_payload_bytes)
-    except (ValueError, UnicodeError, RecursionError) as exc:
-        raise ProtocolError("Invalid message") from exc
+def percentile(sorted_vals: list, p: float):
+    """Percentile dùng nội suy tuyến tính (khớp numpy.percentile mặc định)."""
+    if not sorted_vals:
+        return None
+    if len(sorted_vals) == 1:
+        return sorted_vals[0]
+    k = (len(sorted_vals) - 1) * p
+    f = int(k)
+    c = min(f + 1, len(sorted_vals) - 1)
+    return sorted_vals[f] + (sorted_vals[c] - sorted_vals[f]) * (k - f)
