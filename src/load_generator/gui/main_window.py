@@ -130,10 +130,9 @@ class LoadGeneratorApp(tk.Tk):
             success = sum(item.status == "SUCCESS" for item in results)
             failed = sum(item.status == "FAILED" for item in results)
             stopped = sum(item.status == "STOPPED" for item in results)
-            sent = sum(item.status == "SENT" for item in results)
             self.events.put((
                 "finished",
-                f"Completed: SUCCESS={success}, SENT={sent}, "
+                f"Completed: SUCCESS={success}, "
                 f"FAILED={failed}, STOPPED={stopped}"
             ))
         except Exception as exc:
