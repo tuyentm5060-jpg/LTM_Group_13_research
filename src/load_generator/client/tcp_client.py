@@ -1,7 +1,8 @@
 import asyncio
-import json
 import uuid
 from dataclasses import dataclass
+
+from common.protocol import ProtocolError, encode_message, read_message
 
 PAYLOAD_SIZE = 1024
 
@@ -38,42 +39,42 @@ async def run_client(client_id, host, port, stop_event,
         if stop_event.is_set():
             return ClientResult(client_id, request_id, "STOPPED", "Stopped before send")
 
-        # Standalone protocol: one UTF-8 JSON object per line (newline delimiter).
-        # payload field = 1024 bytes; complete JSON frame is larger than 1024 bytes.
-        frame = (json.dumps(request, ensure_ascii=False) + "\n").encode("utf-8")
-        writer.write(frame)
-        await writer.drain()
-
         try:
-            response_line = await asyncio.wait_for(
-                reader.readline(), timeout=response_timeout
-            )
+            writer.write(encode_message(request))
+            async with asyncio.timeout(response_timeout):
+                await writer.drain()
+                response = await read_message(reader, PAYLOAD_SIZE)
         except asyncio.TimeoutError:
             return ClientResult(
-                client_id, request_id, "SENT",
-                "Request sent; no response received before timeout"
+                client_id, request_id, "FAILED",
+                "Timeout sending request or waiting for complete response"
             )
 
-        if not response_line:
-            return ClientResult(
-                client_id, request_id, "SENT",
-                "Request sent; server closed connection without a response"
-            )
-
-        response = json.loads(response_line.decode("utf-8"))
-        if response.get("requestId") != request_id:
+        if response["requestId"] != request_id:
             return ClientResult(
                 client_id, request_id, "FAILED",
                 "Response requestId does not match"
+            )
+        if response["payload"] != request["payload"]:
+            return ClientResult(
+                client_id, request_id, "FAILED",
+                "Response payload does not match"
             )
 
         return ClientResult(
             client_id, request_id, "SUCCESS", "Request sent and response verified"
         )
 
-    except (OSError, asyncio.TimeoutError) as exc:
-        return ClientResult(client_id, request_id, "FAILED", str(exc))
-    except (UnicodeDecodeError, json.JSONDecodeError, ValueError) as exc:
+    except asyncio.TimeoutError:
+        return ClientResult(client_id, request_id, "FAILED", "Connection timeout")
+    except asyncio.IncompleteReadError:
+        return ClientResult(
+            client_id, request_id, "FAILED",
+            "Server closed connection before a complete response was received"
+        )
+    except OSError as exc:
+        return ClientResult(client_id, request_id, "FAILED", f"Connection error: {exc}")
+    except ProtocolError as exc:
         return ClientResult(client_id, request_id, "FAILED", f"Invalid response: {exc}")
     except Exception as exc:
         return ClientResult(client_id, request_id, "FAILED", f"Unexpected error: {exc}")
@@ -81,6 +82,7 @@ async def run_client(client_id, host, port, stop_event,
         if writer is not None:
             writer.close()
             try:
-                await writer.wait_closed()
+                async with asyncio.timeout(response_timeout):
+                    await writer.wait_closed()
             except Exception:
                 pass
