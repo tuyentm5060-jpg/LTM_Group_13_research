@@ -1,80 +1,130 @@
-# LTM Group 13 — TCP Server Load Research
+﻿# LTM Group 13 — TCP Server Load Research
 
-Khảo sát ảnh hưởng của số client TCP đồng thời đến latency, throughput, error rate
-và CPU của server. Đã có server skeleton asyncio; bộ tạo tải và benchmark chưa triển khai.
+## 1. Giới thiệu
 
-## Thiết lập Python (Windows / PowerShell)
+Ứng dụng desktop gồm Client GUI và TCP Server, dùng để khảo sát ảnh hưởng của
+số client đồng thời đến RTT, latency, throughput và tỷ lệ lỗi của server.
+Client gửi request chứa `requestId` và `payload`; server trả lại dữ liệu để client
+kiểm tra tính chính xác và đo thời gian phản hồi.
 
-Yêu cầu Python >= 3.11. Môi trường hiện tại đã tạo bằng Python 3.13.14.
+## 2. Chức năng
 
-```powershell
-cd LTM_Group_13_research
-python -m venv .venv
-.\.venv\Scripts\Activate.ps1
-python -m pip install -r requirements-dev.txt
-python scripts/check_environment.py
+- Nhập host, port, số client, số request/client, kích thước payload, timeout và think time trên GUI.
+- Tạo nhiều client TCP đồng thời, mỗi client giữ một kết nối để gửi nhiều request.
+- Gửi tuần tự trên mỗi kết nối: nhận response của request trước rồi mới gửi request tiếp theo.
+- Server echo lại `requestId` và `payload`; client kiểm tra cả hai trường.
+- Xử lý timeout, ngắt kết nối, dữ liệu không hợp lệ và payload vượt giới hạn.
+- Lỗi ở một kết nối được xử lý riêng, các kết nối khác tiếp tục hoạt động.
+- Hiển thị trạng thái client: `SUCCESS`, `FAILED`, `STOPPED` và chi tiết kết quả.
+- Đo RTT trung bình, min/max, p50, p95, p99, throughput và tỷ lệ lỗi.
+- Xuất dữ liệu từng request ra CSV.
+- Chạy benchmark qua CLI, hỗ trợ warm-up, đo theo thời gian và lặp theo cấu hình JSON.
+- GUI chạy phần tạo tải trong worker thread, cập nhật giao diện qua hàng đợi sự kiện.
+- Server ghi log khởi động/dừng ở mức INFO; ngắt kết nối và lỗi client ở mức DEBUG.
+
+
+## 3. Giao thức
+
+- Port mặc định: `9000`.
+- Mỗi frame gồm 4 byte độ dài unsigned big-endian, theo sau là JSON UTF-8.
+- Độ dài trong header là số byte của phần JSON, không tính 4 byte header.
+- `requestId`: chuỗi không rỗng, tối đa 128 ký tự.
+- `payload`: chuỗi, kiểm tra kích thước theo số byte UTF-8.
+- Payload mặc định của client: 1.024 byte, không tính overhead JSON và header.
+- Giới hạn payload mặc định của server: 65.536 byte; frame tối đa 512 KiB.
+- Server đọc đủ header và body, hỗ trợ frame bị chia nhỏ hoặc nhiều frame được gửi liền nhau.
+- Server có timeout riêng cho việc đọc toàn bộ frame và gửi response.
+- Dữ liệu sai hoặc timeout làm đóng riêng kết nối đó; server không gửi error frame.
+
+Ví dụ request và response echo tương ứng:
+
+```json
+{
+  "requestId": "c1-r1-example",
+  "payload": "hello"
+}
 ```
 
-Nếu PowerShell chặn activate, sử dụng trực tiếp interpreter, không cần đổi execution policy:
+### Mã lỗi trả về client
 
-```powershell
-.\.venv\Scripts\python.exe -m pip install -r requirements-dev.txt
-.\.venv\Scripts\python.exe scripts/check_environment.py
+## 4. Cấu hình
+
+Server nhận cấu hình bằng tham số dòng lệnh; client nhận cấu hình qua GUI hoặc CLI.
+CLI đọc file `experiments/configs/baseline.json` khi dùng tùy chọn `--config`:
+
+```json
+{
+  "host": "127.0.0.1",
+  "port": 9000,
+  "client_counts": [1, 10, 50],
+  "repetitions": 3,
+  "payload_bytes": 1024,
+  "warmup_seconds": 5,
+  "measurement_seconds": 20,
+  "timeout_seconds": 5,
+  "max_payload_bytes": 65536
+}
 ```
 
-Trong VS Code: `Python: Select Interpreter` → `.venv\Scripts\python.exe`.
-Linux/macOS: tạo bằng `python3 -m venv .venv`, kích hoạt bằng `source .venv/bin/activate`.
+- Chạy lần lượt 1, 10, 50 client; mỗi mức lặp 3 lần.
+- Mỗi lượt có warm-up 5 giây và đo chính thức theo thời lượng cấu hình 20 giây.
+- Các request warm-up không được đưa vào thống kê chính thức.
+- Server không tự đọc file này. Giới hạn payload của server được đặt bằng `--max-payload-bytes`.
+- Think time là khoảng nghỉ giữa các request, mặc định 0 giây.
 
-## Cấu trúc
+## 4. Cấu trúc thư mục
 
 ```text
-src/
-  server/                 # TCP server (process riêng)
-  load_generator/         # Bộ tạo tải; mỗi client một kết nối TCP
-  common/                 # Protocol, cấu hình và kiểu dữ liệu dùng chung
-experiments/
-  configs/                # Cấu hình tái lập các kịch bản
-  raw-data/               # CSV/JSON thô từ các lần chạy
-  analysis/               # Script phân tích và kiểm chứng độc lập
-  figures/                # Biểu đồ từ dữ liệu thực nghiệm
-tests/                    # Kiểm thử protocol và tích hợp
-scripts/                  # Công cụ hỗ trợ môi trường
-docs/                     # Thiết kế, phương pháp đo, báo cáo, đóng góp
+LTM_Group_13_research/
+├── README.md
+├── requirements.txt                   # Công cụ đo CPU và vẽ biểu đồ
+├── requirements-dev.txt               # Thư viện kiểm thử
+├── pyproject.toml                     # Cấu hình pytest
+│
+├── src/
+│   ├── common/
+│   │   └── protocol.py                # Framing, đọc/ghi và kiểm tra message
+│   ├── server/
+│   │   ├── __main__.py                # Khởi chạy server, đọc tham số dòng lệnh
+│   │   └── app.py                     # TCP echo, timeout, disconnect, dọn kết nối
+│   ├── load_generator/
+│   │   ├── main.py                    # Khởi chạy GUI hoặc CLI
+│   │   ├── generator.py               # Chạy bộ tạo tải
+│   │   ├── benchmark.py               # CLI, cấu hình JSON và các lần lặp
+│   │   ├── metrics.py                 # Tính chỉ số và xuất CSV
+│   │   ├── client/
+│   │   │   ├── tcp_client.py          # Kết nối, gửi request, kiểm tra echo, đo RTT
+│   │   │   └── client_manager.py      # Điều phối nhiều client, tổng hợp kết quả
+│   │   └── gui/
+│   │       └── main_window.py         # Giao diện cấu hình và kết quả
+│   └── experiments/
+│       └── raw-data/
+│           └── raw_metrics.csv        # CSV của lượt chạy thử hiện có
+│
+├── experiments/
+│   ├── configs/
+│   │   └── baseline.json              # Cấu hình các mức tải và số lần lặp
+│   ├── raw-data/                      # Nơi lưu CSV khi chạy từ gốc project
+│   ├── analysis/
+│   └── figures/
+│
+└── tests/
+    ├── test_server.py                 # Echo, dữ liệu lỗi, timeout, disconnect
+    └── test_load_generator.py         # Percentile, tích hợp client/server và CSV
 ```
 
-`load_generator` dùng dấu gạch dưới để làm package Python. Server và bộ tạo tải
-sẽ dùng thư viện chuẩn (`asyncio`, `socket`, `json`, `argparse`); `psutil` dành cho
-đo CPU, `matplotlib` dành cho biểu đồ, `pytest` dành cho kiểm thử.
+## 5. Cài đặt và chạy
 
-## Kế hoạch thí nghiệm
-
-`experiments/configs/baseline.json` chuẩn bị các mức 1, 10, 50 client,
-3 lần lặp/mức, payload 1024 byte, warm-up 5 giây, đo chính thức 20 giây.
-Đây là cấu hình dự kiến, chưa có chương trình đọc và thực thi cấu hình.
-
-Server đã có framing, echo requestId/payload, timeout, disconnect và giới hạn payload.
-Cần triển khai load generator, đo lường và lệnh tái tạo thí nghiệm.
-
-Checklist yêu cầu và quyết định ban đầu: [docs/research-plan.md](docs/research-plan.md).
-Không commit `.venv`, cache hoặc log tạm. Dữ liệu thô và biểu đồ có chủ đích được
-giữ trong Git để tái lập nghiên cứu. Không đưa thông tin cá nhân vào dữ liệu đo.
-
-## Chạy server skeleton
-
-Tại thư mục project, sau khi kích hoạt `.venv`:
+### Server
 
 ```powershell
-$env:PYTHONPATH = "src"
 python -m server --host 127.0.0.1 --port 9000 --timeout 5 --max-payload-bytes 65536
 ```
 
-Dừng bằng Ctrl+C. Linux/macOS: `PYTHONPATH=src python -m server`.
-Server dùng một coroutine cho mỗi kết nối, hỗ trợ nhiều request trên một kết nối.
-Mỗi frame gồm 4 byte độ dài unsigned big-endian và JSON UTF-8 có `requestId`
-(chuỗi không rỗng, tối đa 128 ký tự) và `payload` (chuỗi, giới hạn theo byte UTF-8).
-Response trả lại đúng hai trường này. Frame tối đa 512 KiB; payload mặc định 64 KiB.
-Dữ liệu sai hoặc timeout sẽ đóng riêng kết nối đó, không gửi error frame.
-Timeout áp dụng cho việc đọc toàn bộ một frame và drain response, mỗi bước riêng.
-Server không log từng request ở mức INFO để hạn chế ảnh hưởng đến benchmark.
+Dừng server bằng Ctrl+C. 
+### Client GUI
 
-Chạy kiểm thử: `python -m pytest -q`.
+```powershell
+python -m load_generator.main
+```
+

@@ -218,3 +218,6 @@ __marimo__/
 
 # Streamlit
 .streamlit/secrets.toml
+
+# Local trial benchmark output
+/src/experiments/raw-data/raw_metrics.csv
