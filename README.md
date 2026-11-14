@@ -105,8 +105,13 @@ LTM_Group_13_research/
 │   ├── configs/
 │   │   └── baseline.json              # Cấu hình các mức tải và số lần lặp
 │   ├── raw-data/                      # Nơi lưu CSV khi chạy từ gốc project
-│   ├── analysis/
-│   └── figures/
+│   ├── analysis/                      # Script và bảng tổng hợp từ CSV
+│   │   ├── analyze.py
+│   │   ├── summary.csv
+│   │   └── by_client.csv
+│   └── figures/                       # Biểu đồ RTT được tạo từ dữ liệu
+│       ├── rtt_by_client.png
+│       └── rtt_distribution.png
 │
 └── tests/
     ├── test_server.py                 # Echo, dữ liệu lỗi, timeout, disconnect
@@ -130,3 +135,26 @@ Dừng server bằng Ctrl+C.
 $env:PYTHONPATH = "src" 
 python -m load_generator.main 
 ```
+
+### Phân tích CSV và vẽ biểu đồ
+
+```powershell
+python -m pip install matplotlib==3.10.8
+python experiments/analysis/analyze.py
+```
+
+Kết quả mỗi lần chạy sẽ cập nhật các file sau:
+
+| File | Nội dung |
+|---|---|
+| `experiments/analysis/summary.csv` | Tổng request, thành công/lỗi, tỷ lệ lỗi, RTT trung bình, min/max, p50/p95/p99 |
+| `experiments/analysis/by_client.csv` | Các chỉ số tương tự, tổng hợp riêng từng client |
+| `experiments/figures/rtt_by_client.png` | So sánh RTT trung bình và p95 của từng client |
+| `experiments/figures/rtt_distribution.png` | Phân bố RTT và các đường đánh dấu trung bình/p95 |
+
+Lưu kết quả riêng cho nhiều lượt bằng `--summary-dir` và `--figures-dir`:
+
+```powershell
+python experiments/analysis/analyze.py --input experiments/raw-data/raw_10c_rep1.csv --summary-dir experiments/analysis/10c_rep1 --figures-dir experiments/figures/10c_rep1
+```
+
