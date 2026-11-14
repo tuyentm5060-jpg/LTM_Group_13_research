@@ -1,0 +1,2 @@
+source,clients,total_requests,success_count,error_count,error_rate_pct,avg_rtt_ms,min_rtt_ms,max_rtt_ms,p50_rtt_ms,p95_rtt_ms,p99_rtt_ms,duration_seconds,throughput_rps
+src\experiments\raw-data\raw_metrics.csv,50,500,500,0,0.0,3.5910488,2.5039,5.1214,3.5294,4.722,5.0316,,
