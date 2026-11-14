@@ -113,18 +113,20 @@ LTM_Group_13_research/
     └── test_load_generator.py         # Percentile, tích hợp client/server và CSV
 ```
 
-## 5. Cài đặt và chạy
+## 5. Cài đặt và chạy 
+### POWER SHELL – THIẾT LẬP MÔI TRƯỜNG ẢO 
 
-### Server
+python -m venv .venv 
+.\.venv\Scripts\python.exe -m pip install -r requirements-dev.txt 
 
-```powershell
-python -m server --host 127.0.0.1 --port 9000 --timeout 5 --max-payload-bytes 65536
-```
-
-Dừng server bằng Ctrl+C. 
+### Server 
+```powershell 
+$env:PYTHONPATH = "src" 
+python -m server --host 127.0.0.1 --port 9000 --timeout 5 --max-payload-bytes 65536 
+``` 
+Dừng server bằng Ctrl+C.
 ### Client GUI
-
-```powershell
-python -m load_generator.main
+```powershell 
+$env:PYTHONPATH = "src" 
+python -m load_generator.main 
 ```
-
