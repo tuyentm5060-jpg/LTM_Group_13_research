@@ -1,0 +1,10 @@
+﻿clients,repetition,elapsed_seconds_terminal_rounded,throughput_req_s_terminal,source
+1,1,19.994,8825.71,Ảnh Terminal benchmark người dùng cung cấp
+1,2,19.997,9012.33,Ảnh Terminal benchmark người dùng cung cấp
+1,3,20.0,8994.14,Ảnh Terminal benchmark người dùng cung cấp
+10,1,20.053,15634.58,Ảnh Terminal benchmark người dùng cung cấp
+10,2,20.064,15323.54,Ảnh Terminal benchmark người dùng cung cấp
+10,3,20.07,15111.79,Ảnh Terminal benchmark người dùng cung cấp
+50,1,19.995,15419.89,Ảnh Terminal benchmark người dùng cung cấp
+50,2,20.008,15817.82,Ảnh Terminal benchmark người dùng cung cấp
+50,3,20.0,15575.08,Ảnh Terminal benchmark người dùng cung cấp
